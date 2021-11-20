@@ -5,24 +5,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// initCmd
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "",
-	Long:  ``,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		comm, err := ipfslite.New(".wimp", "0")
-		if err != nil {
-			return err
-		}
-		err = ipfslite.Init(comm)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-}
+func InitCmd(comm *ipfslite.Common) *cobra.Command {
+	return &cobra.Command{
+		Use:   "init",
+		Short: "",
+		Long: `
 
-func init() {
-	rootCmd.AddCommand(initCmd)
+		`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := ipfslite.Init(comm)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+	}
 }
