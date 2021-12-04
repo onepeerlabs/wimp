@@ -21,6 +21,10 @@ func New() *Account {
 	return &Account{}
 }
 
+func (a *Account) GetMnemonic() string {
+	return a.encryptedMnemonic
+}
+
 func (a *Account) CreateMnemonic(passPhrase string) (string, string, error) {
 	entropy, err := bip39.NewEntropy(128)
 	if err != nil {

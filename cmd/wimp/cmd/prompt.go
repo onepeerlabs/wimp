@@ -12,10 +12,9 @@ import (
 	"strings"
 
 	"github.com/c-bata/go-prompt"
-	ipfslite "github.com/datahop/ipfs-lite/pkg"
 	"github.com/datahop/ipfs-lite/pkg/store"
 	"github.com/manifoldco/promptui"
-	"github.com/onepeerlabs/wimp/pkg/encrypt"
+	"github.com/onepeerlabs/wimp/pkg/manager"
 	generator "github.com/sethvargo/go-password/password"
 	"github.com/tobischo/gokeepasslib/v3"
 )
@@ -31,7 +30,7 @@ const (
 
 var (
 	absoluteRoot = ""
-	comm         *ipfslite.Common
+	passwordManager         *manager.Manager
 )
 
 type PasswordMetaInfo struct {
@@ -47,32 +46,18 @@ func initPrompt() {
 		os.Exit(1)
 	}
 
-	absoluteRoot = usr.HomeDir + string(os.PathSeparator) + root
-
-	err = ipfslite.Init(absoluteRoot, port)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	comm, err = ipfslite.New(context.Background(), absoluteRoot, port)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
 	secretPrompt := promptui.Prompt{
 		Label: "Connectivity Secret ",
 		Mask:  '*',
 	}
 	secret, _ := secretPrompt.Run()
 
-	// Start
-	_, err = comm.Start(secret)
+	absoluteRoot = usr.HomeDir + string(os.PathSeparator) + root
+
+	passwordManager, err = manager.New(context.Background(), absoluteRoot, port, secret)
 	if err != nil {
-		log.Debug("ipfslite start failed", err.Error())
-		log.Error("ipfslite start failed")
-		return
+		fmt.Printf("Failed creating password manager %s\n", err.Error())
+		os.Exit(1)
 	}
 
 	err = reloadTags()
@@ -116,6 +101,7 @@ var passwordMetadata = map[string]PasswordMetaInfo{}
 
 func reloadTags() error {
 	tagSuggestions = []prompt.Suggest{}
+	comm := passwordManager.GetNode()
 	tags, err := comm.Node.ReplManager().GetAllTags()
 	if err != nil {
 		log.Debug("unable to get all tags", err.Error())
@@ -155,6 +141,16 @@ func reloadTags() error {
 func executor(in string) {
 	in = strings.TrimSpace(in)
 	blocks := strings.Split(in, " ")
+
+	comm := passwordManager.GetNode()
+	node := comm.Node
+	acc := passwordManager.GetAccount()
+
+	if !passwordManager.IsInitialised() && blocks[0] != "init" && blocks[0] != "exit" {
+		fmt.Println("secret is not initialised, please run \"init\"")
+		return
+	}
+
 	switch blocks[0] {
 	case "exit":
 		fmt.Println("exiting")
@@ -166,28 +162,11 @@ func executor(in string) {
 			return
 		}
 		tag := blocks[len(blocks)-1]
-		node := comm.Node
-		mnemonicReader, _, err := node.Get(comm.Context, mnemonicTag)
-		if err != nil {
-			log.Debug("get mnemonic failed", err.Error())
-			log.Error("get mnemonic failed")
-			return
-		}
-		mnemonic := bytes.NewBuffer(nil)
-		_, err = io.Copy(mnemonic, mnemonicReader)
-		if err != nil {
-			log.Debug("mnemonic read failed", err.Error())
-			log.Error("mnemonic read failed")
-			return
-		}
-		acc := encrypt.New()
-		acc.LoadMnemonic(mnemonic.String())
 		passPrompt := promptui.Prompt{
 			Label: "Master Password ",
 			Mask:  '*',
 		}
 		masterPassword, _ := passPrompt.Run()
-		log.Debug(tag)
 		// check if mnemonic already exists
 		r, _, err := node.Get(comm.Context, tag)
 		if err != nil {
@@ -233,10 +212,10 @@ func executor(in string) {
 
 		// TODO: copy to clipboard
 	case "init":
-		node := comm.Node
 		// check if mnemonic already exists
 		_, _, err := node.Get(comm.Context, mnemonicTag)
-		if err == nil {
+		if passwordManager.IsInitialised() {
+			fmt.Println("secret is already initialised")
 			log.Debug("init : repository already initialised")
 			log.Error("init : repository already initialised")
 			return
@@ -250,7 +229,6 @@ func executor(in string) {
 		password, _ := passPrompt.Run()
 
 		// Generate Mnemonic
-		acc := encrypt.New()
 		mnemonic, encryptedMessage, err := acc.CreateMnemonic(password)
 		if err != nil {
 			log.Debug("mnemonic creation failed", err.Error())
@@ -337,7 +315,7 @@ func executor(in string) {
 			log.Error("unable to generate password")
 			return
 		}
-	regenaratePrompt:
+	regeneratePrompt:
 		regenPrompt := promptui.Prompt{
 			Label:       fmt.Sprintf("New Password is %s Do you want to choose the above password ? ", password),
 			HideEntered: true,
@@ -350,7 +328,7 @@ func executor(in string) {
 			goto regenerate
 		default:
 			fmt.Println("unknown choice")
-			goto regenaratePrompt
+			goto regeneratePrompt
 		}
 		// prompt for domain
 		domainPrompt := promptui.Prompt{
@@ -389,22 +367,6 @@ func executor(in string) {
 		case "y", "yes":
 			// encrypt and save
 			fmt.Println("saving")
-			node := comm.Node
-			r, _, err := node.Get(comm.Context, mnemonicTag)
-			if err != nil {
-				log.Debug("get mnemonic failed", err.Error())
-				log.Error("get mnemonic failed")
-				return
-			}
-			mnemonic := bytes.NewBuffer(nil)
-			_, err = io.Copy(mnemonic, r)
-			if err != nil {
-				log.Debug("mnemonic read failed", err.Error())
-				log.Error("mnemonic read failed")
-				return
-			}
-			acc := encrypt.New()
-			acc.LoadMnemonic(mnemonic.String())
 			encryptionPasswordPrompt := promptui.Prompt{
 				Label: "Please enter master password ",
 			}
@@ -513,22 +475,6 @@ func executor(in string) {
 		case "y", "yes":
 			// encrypt and save
 			fmt.Println("saving")
-			node := comm.Node
-			r, _, err := node.Get(comm.Context, mnemonicTag)
-			if err != nil {
-				log.Debug("get mnemonic failed", err.Error())
-				log.Error("get mnemonic failed")
-				return
-			}
-			mnemonic := bytes.NewBuffer(nil)
-			_, err = io.Copy(mnemonic, r)
-			if err != nil {
-				log.Debug("mnemonic read failed", err.Error())
-				log.Error("mnemonic read failed")
-				return
-			}
-			acc := encrypt.New()
-			acc.LoadMnemonic(mnemonic.String())
 			encryptionPasswordPrompt := promptui.Prompt{
 				Label: "Please enter master password ",
 			}
@@ -624,22 +570,6 @@ func executor(in string) {
 			log.Error("failed to unlock kdbx")
 			return
 		}
-		node := comm.Node
-		r, _, err := node.Get(comm.Context, mnemonicTag)
-		if err != nil {
-			log.Debug("get mnemonic failed", err.Error())
-			log.Error("get mnemonic failed")
-			return
-		}
-		mnemonic := bytes.NewBuffer(nil)
-		_, err = io.Copy(mnemonic, r)
-		if err != nil {
-			log.Debug("mnemonic read failed", err.Error())
-			log.Error("mnemonic read failed")
-			return
-		}
-		acc := encrypt.New()
-		acc.LoadMnemonic(mnemonic.String())
 		encryptionPasswordPrompt := promptui.Prompt{
 			Label: "Please enter master password ",
 		}

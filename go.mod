@@ -11,9 +11,6 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/tobischo/gokeepasslib/v3 v3.2.4
 	github.com/tyler-smith/go-bip39 v1.1.0
-)
-
-require (
 	github.com/Stebalien/go-bitfield v0.0.1 // indirect
 	github.com/aead/argon2 v0.0.0-20180111183520-a87724528b07 // indirect
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
