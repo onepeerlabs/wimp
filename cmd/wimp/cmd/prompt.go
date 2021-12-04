@@ -11,18 +11,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/c-bata/go-prompt"
+	ipfslite "github.com/datahop/ipfs-lite/pkg"
 	"github.com/datahop/ipfs-lite/pkg/store"
 	"github.com/manifoldco/promptui"
 	"github.com/onepeerlabs/wimp/pkg/encrypt"
 	generator "github.com/sethvargo/go-password/password"
-
-	"github.com/c-bata/go-prompt"
-	ipfslite "github.com/datahop/ipfs-lite/pkg"
+	"github.com/tobischo/gokeepasslib/v3"
 )
 
 const (
 	DefaultPrompt = "wimp"
-	Seperator     = ">>>"
+	Separator     = ">>>"
 
 	passwordPrefix     = "/password/"
 	passwordMetaPrefix = "/meta/"
@@ -85,7 +85,7 @@ func initPrompt() {
 	p := prompt.New(
 		executor,
 		completer,
-		prompt.OptionPrefix(DefaultPrompt+" "+Seperator),
+		prompt.OptionPrefix(DefaultPrompt+" "+Separator),
 	)
 	p.Run()
 }
@@ -115,6 +115,7 @@ var tagSuggestions = []prompt.Suggest{}
 var passwordMetadata = map[string]PasswordMetaInfo{}
 
 func reloadTags() error {
+	tagSuggestions = []prompt.Suggest{}
 	tags, err := comm.Node.ReplManager().GetAllTags()
 	if err != nil {
 		log.Debug("unable to get all tags", err.Error())
@@ -229,6 +230,7 @@ func executor(in string) {
 			HideEntered: true,
 		}
 		_, _ = passwordPrompt.Run()
+
 		// TODO: copy to clipboard
 	case "init":
 		node := comm.Node
@@ -457,6 +459,253 @@ func executor(in string) {
 			fmt.Println("going empty handed")
 		default:
 		}
+
+	case "new":
+		passwordPrompt := promptui.Prompt{
+			Label: "Password ",
+			Mask:  '*',
+		}
+		password, _ := passwordPrompt.Run()
+		confirmPasswordPrompt := promptui.Prompt{
+			Label: "Confirm Password ",
+			Mask:  '*',
+		}
+		confirmPassword, _ := confirmPasswordPrompt.Run()
+		if password != confirmPassword {
+			fmt.Println("Please type password correctly")
+			return
+		}
+
+		// prompt for domain
+		domainPrompt := promptui.Prompt{
+			Label: "Please enter domain name ",
+		}
+		domain, _ := domainPrompt.Run()
+		// prompt for username
+		userPrompt := promptui.Prompt{
+			Label: "Please enter username ",
+		}
+		username, _ := userPrompt.Run()
+		// prompt for description
+		descPrompt := promptui.Prompt{
+			Label: "Please enter additional description ",
+		}
+		desc, _ := descPrompt.Run()
+
+		// show details with generated password
+		meta := &PasswordMetaInfo{
+			Domain:      domain,
+			Username:    username,
+			Description: desc,
+		}
+		fmt.Println("=============== Details ==========================")
+		fmt.Printf("Domain : %s\n", domain)
+		fmt.Printf("Username : %s\n", username)
+		fmt.Printf("Description : %s\n", desc)
+		fmt.Println("=============== Details ==========================")
+
+		confirmPrompt := promptui.Prompt{
+			Label:     "Do you want to save this ",
+			IsConfirm: true,
+		}
+		confirm, _ := confirmPrompt.Run()
+		switch strings.ToLower(confirm) {
+		case "y", "yes":
+			// encrypt and save
+			fmt.Println("saving")
+			node := comm.Node
+			r, _, err := node.Get(comm.Context, mnemonicTag)
+			if err != nil {
+				log.Debug("get mnemonic failed", err.Error())
+				log.Error("get mnemonic failed")
+				return
+			}
+			mnemonic := bytes.NewBuffer(nil)
+			_, err = io.Copy(mnemonic, r)
+			if err != nil {
+				log.Debug("mnemonic read failed", err.Error())
+				log.Error("mnemonic read failed")
+				return
+			}
+			acc := encrypt.New()
+			acc.LoadMnemonic(mnemonic.String())
+			encryptionPasswordPrompt := promptui.Prompt{
+				Label: "Please enter master password ",
+			}
+			masterPassword, _ := encryptionPasswordPrompt.Run()
+			encryptedPassword, err := acc.EncryptContent(masterPassword, password)
+			if err != nil {
+				log.Debug("password encryption failed", err.Error())
+				log.Error("password encryption failed")
+				return
+			}
+			info := &store.Info{
+				Tag:         fmt.Sprintf("%s%s/%s", passwordPrefix, domain, username),
+				Type:        "text",
+				Name:        fmt.Sprintf("/%s/%s", domain, username),
+				IsEncrypted: true,
+				Size:        int64(len(encryptedPassword[:])),
+			}
+			buf := bytes.NewReader([]byte(encryptedPassword))
+			_, err = node.Add(comm.Context, buf, info)
+			if err != nil {
+				log.Debug("password store failed", err.Error())
+				log.Error("password store failed")
+				return
+			}
+			metaBytes, err := json.Marshal(meta)
+			if err != nil {
+				log.Debug("failed marshalling meta", err.Error())
+				log.Error("failed marshalling meta")
+				return
+			}
+			metaInfo := &store.Info{
+				Tag:         fmt.Sprintf("%s%s/%s", passwordMetaPrefix, domain, username),
+				Type:        "text",
+				Name:        fmt.Sprintf("/%s/%s", domain, username),
+				IsEncrypted: false,
+				Size:        int64(len(metaBytes)),
+			}
+			metaBuf := bytes.NewReader(metaBytes)
+			_, err = node.Add(comm.Context, metaBuf, metaInfo)
+			if err != nil {
+				log.Debug("password metadata store failed", err.Error())
+				log.Error("password metadata store failed")
+				return
+			}
+			err = reloadTags()
+			if err != nil {
+				log.Debug("failed to reload tags", err.Error())
+				log.Error("failed to reload tags")
+				return
+			}
+		case "n", "no":
+			fmt.Println("going empty handed")
+		default:
+		}
 		return
+	case "import":
+		if len(blocks) < 2 {
+			fmt.Println("kdbx path not specified")
+		}
+		kdbx := blocks[1]
+		// check file stat
+		_, err := os.Stat(kdbx)
+		if err != nil {
+			log.Debug("unable to read kdbx file", err.Error())
+			log.Error("unable to read kdbx file")
+			return
+		}
+		file, err := os.Open(kdbx)
+		if err != nil {
+			log.Debug("unable to read kdbx file", err.Error())
+			log.Error("unable to read kdbx file")
+			return
+		}
+
+		passwordPrompt := promptui.Prompt{
+			Label: "KDBX Credential Password ",
+			Mask:  '*',
+		}
+		password, _ := passwordPrompt.Run()
+
+		db := gokeepasslib.NewDatabase()
+		db.Credentials = gokeepasslib.NewPasswordCredentials(password)
+		err = gokeepasslib.NewDecoder(file).Decode(db)
+		if err != nil {
+			log.Debug("failed to decode kdbx", err.Error())
+			log.Error("failed to decode kdbx")
+			return
+		}
+
+		err = db.UnlockProtectedEntries()
+		if err != nil {
+			log.Debug("failed to unlock kdbx", err.Error())
+			log.Error("failed to unlock kdbx")
+			return
+		}
+		node := comm.Node
+		r, _, err := node.Get(comm.Context, mnemonicTag)
+		if err != nil {
+			log.Debug("get mnemonic failed", err.Error())
+			log.Error("get mnemonic failed")
+			return
+		}
+		mnemonic := bytes.NewBuffer(nil)
+		_, err = io.Copy(mnemonic, r)
+		if err != nil {
+			log.Debug("mnemonic read failed", err.Error())
+			log.Error("mnemonic read failed")
+			return
+		}
+		acc := encrypt.New()
+		acc.LoadMnemonic(mnemonic.String())
+		encryptionPasswordPrompt := promptui.Prompt{
+			Label: "Please enter master password ",
+		}
+		masterPassword, _ := encryptionPasswordPrompt.Run()
+
+		for _, v := range db.Content.Root.Groups[0].Entries {
+			domain := v.GetContent("URL")
+			username := v.GetContent("UserName")
+			desc := v.GetContent("Notes")
+			meta := &PasswordMetaInfo{
+				Domain:      domain,
+				Username:    username,
+				Description: desc,
+			}
+			fmt.Printf("saving %s for %s on %s", v.GetTitle(), username, domain)
+			fmt.Println(username, v.GetPassword())
+			encryptedPassword, err := acc.EncryptContent(masterPassword, v.GetPassword())
+			if err != nil {
+				log.Debug("password encryption failed", err.Error())
+				log.Error("password encryption failed")
+				return
+			}
+			info := &store.Info{
+				Tag:         fmt.Sprintf("%s%s/%s", passwordPrefix, domain, username),
+				Type:        "text",
+				Name:        fmt.Sprintf("/%s/%s", domain, username),
+				IsEncrypted: true,
+				Size:        int64(len(encryptedPassword[:])),
+			}
+			buf := bytes.NewReader([]byte(encryptedPassword))
+			_, err = node.Add(comm.Context, buf, info)
+			if err != nil {
+				log.Debug("password store failed", err.Error())
+				log.Error("password store failed")
+				return
+			}
+			metaBytes, err := json.Marshal(meta)
+			if err != nil {
+				log.Debug("failed marshalling meta", err.Error())
+				log.Error("failed marshalling meta")
+				return
+			}
+			metaInfo := &store.Info{
+				Tag:         fmt.Sprintf("%s%s/%s", passwordMetaPrefix, domain, username),
+				Type:        "text",
+				Name:        fmt.Sprintf("/%s/%s", domain, username),
+				IsEncrypted: false,
+				Size:        int64(len(metaBytes)),
+			}
+			metaBuf := bytes.NewReader(metaBytes)
+			_, err = node.Add(comm.Context, metaBuf, metaInfo)
+			if err != nil {
+				log.Debug("password metadata store failed", err.Error())
+				log.Error("password metadata store failed")
+				return
+			}
+		}
+		err = reloadTags()
+		if err != nil {
+			log.Debug("failed to reload tags", err.Error())
+			log.Error("failed to reload tags")
+			return
+		}
+		case "n", "no":
+			fmt.Println("going empty handed")
+		default:
 	}
+	return
 }
