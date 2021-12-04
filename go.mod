@@ -3,19 +3,30 @@ module github.com/onepeerlabs/wimp
 go 1.17
 
 require (
+	github.com/c-bata/go-prompt v0.2.4
+	github.com/datahop/ipfs-lite v0.0.14-0.20211130050542-e4ecdcfd64c3
+	github.com/ipfs/go-log/v2 v2.3.0
+	github.com/manifoldco/promptui v0.9.0
+	github.com/sethvargo/go-password v0.2.0
+	github.com/spf13/cobra v1.2.1
+	github.com/tobischo/gokeepasslib/v3 v3.2.4
+	github.com/tyler-smith/go-bip39 v1.1.0
+)
+
+require (
 	github.com/Stebalien/go-bitfield v0.0.1 // indirect
+	github.com/aead/argon2 v0.0.0-20180111183520-a87724528b07 // indirect
+	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/bits-and-blooms/bloom/v3 v3.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
-	github.com/c-bata/go-prompt v0.2.4
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/crackcomm/go-gitignore v0.0.0-20170627025303-887ab5e44cc3 // indirect
 	github.com/cskr/pubsub v1.0.2 // indirect
-	github.com/datahop/ipfs-lite v0.0.12
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
@@ -54,7 +65,6 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.1.0 // indirect
 	github.com/ipfs/go-ipns v0.1.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
-	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/ipfs/go-merkledag v0.4.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-peertaskqueue v0.4.0 // indirect
@@ -109,7 +119,6 @@ require (
 	github.com/libp2p/go-tcp-transport v0.2.8 // indirect
 	github.com/libp2p/go-ws-transport v0.5.0 // indirect
 	github.com/libp2p/go-yamux/v2 v2.2.0 // indirect
-	github.com/manifoldco/promptui v0.9.0
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/mattn/go-isatty v0.0.13 // indirect
@@ -142,13 +151,10 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.30.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/sethvargo/go-password v0.2.0
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/whyrusleeping/cbor-gen v0.0.0-20200123233031-1cdf64d27158 // indirect
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
@@ -166,7 +172,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 )
-
-replace github.com/datahop/ipfs-lite => ../../datahop/ipfs-lite
 
 replace github.com/plexsysio/taskmanager => github.com/asabya/taskmanager v0.1.0
