@@ -17,6 +17,7 @@ import (
 	"github.com/onepeerlabs/wimp/pkg/manager"
 	generator "github.com/sethvargo/go-password/password"
 	"github.com/tobischo/gokeepasslib/v3"
+	"github.com/tobischo/gokeepasslib/v3/wrappers"
 	"golang.design/x/clipboard"
 )
 
@@ -234,11 +235,6 @@ func executor(in string) {
 			Mask:  '*',
 		}
 		password, _ := passPrompt.Run()
-		
-		if !acc.VerifyMasterPassword(password) {
-			fmt.Println("wrong master password")
-			return
-		}
 		
 		// Generate Mnemonic
 		mnemonic, encryptedMessage, err := acc.CreateMnemonic(password)
@@ -665,9 +661,129 @@ func executor(in string) {
 			log.Error("failed to reload tags")
 			return
 		}
+	case "export":
+		if len(blocks) < 2 {
+			fmt.Println("kdbx path not specified")
+			return
+		}
+		kdbx := blocks[1]
+		// check file stat
+		_, err := os.Stat(kdbx)
+		if err == nil {
+			log.Debug("file already exists")
+			log.Error("file already exists")
+			return
+		}
+		file, err := os.Create(kdbx)
+		if err != nil {
+			log.Debug("unable to create kdbx file", err.Error())
+			log.Error("unable to create kdbx file")
+			return
+		}
+
+		passwordPrompt := promptui.Prompt{
+			Label: "KDBX Credential Password ",
+			Mask:  '*',
+		}
+		kdbxPassword, _ := passwordPrompt.Run()
+		encryptionPasswordPrompt := promptui.Prompt{
+			Label: "Master Password ",
+			Mask:  '*',
+		}
+		masterPassword, _ := encryptionPasswordPrompt.Run()
+
+		if !acc.VerifyMasterPassword(masterPassword) {
+			fmt.Println("wrong master password")
+			return
+		}
+
+		tags, err := comm.Node.ReplManager().GetAllTags()
+		if err != nil {
+			log.Debug("unable to get all tags", err.Error())
+			log.Error("unable to get all tags")
+			return
+		}
+
+		// create root group
+		rootGroup := gokeepasslib.NewGroup()
+		rootGroup.Name = "root group"
+
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, passwordPrefix) {
+				// check if mnemonic already exists
+				r, _, err := node.Get(comm.Context, tag)
+				if err != nil {
+					log.Debug("get : unable to get tag", tag, err.Error())
+					log.Error("get : unable to get tag", tag)
+					return
+				}
+				buf := bytes.NewBuffer(nil)
+				_, err = io.Copy(buf, r)
+				if err != nil {
+					log.Debug("get : unable to read tag", tag, err.Error())
+					log.Error("get : unable to read tag", tag)
+					return
+				}
+				entryPassword, err := acc.DecryptContent(masterPassword, buf.String())
+				if err != nil {
+					log.Debug("get : unable to decrypt password", tag, err.Error())
+					log.Error("get : unable to decrypt password", tag)
+					return
+				}
+				metatag := strings.Replace(tag, passwordPrefix, passwordMetaPrefix, 1)
+				m := passwordMetadata[metatag]
+
+				entry := gokeepasslib.NewEntry()
+				entry.Values = append(entry.Values, mkValue("Title", tag))
+				entry.Values = append(entry.Values, mkValue("UserName", m.Domain))
+				entry.Values = append(entry.Values, mkProtectedValue("Password", entryPassword))
+				entry.Values = append(entry.Values, mkValue("Notes", m.Description))
+
+				rootGroup.Entries = append(rootGroup.Entries, entry)
+			}
+		}
+
+
+		db := &gokeepasslib.Database{
+			Header:      gokeepasslib.NewHeader(),
+			Credentials: gokeepasslib.NewPasswordCredentials(kdbxPassword),
+			Content: &gokeepasslib.DBContent{
+				Meta: gokeepasslib.NewMetaData(),
+				Root: &gokeepasslib.RootData{
+					Groups: []gokeepasslib.Group{rootGroup},
+				},
+			},
+		}
+
+		// Lock entries using stream cipher
+		err = db.LockProtectedEntries()
+		if err != nil {
+			log.Debug("failed to lock kdbx", err.Error())
+			log.Error("failed to lock kdbx")
+			return
+		}
+
+		// and encode it into the file
+		keepassEncoder := gokeepasslib.NewEncoder(file)
+		if err := keepassEncoder.Encode(db); err != nil {
+			log.Debug("failed to encode kdbx", err.Error())
+			log.Error("failed to encode kdbx")
+			return
+		}
 		case "n", "no":
 			fmt.Println("going empty handed")
 		default:
 	}
 	return
+}
+
+func mkValue(key string, value string) gokeepasslib.ValueData {
+	return gokeepasslib.ValueData{Key: key, Value: gokeepasslib.V{Content: value}}
+}
+
+func mkProtectedValue(key string, value string) gokeepasslib.ValueData {
+	return gokeepasslib.ValueData{
+		Key:   key,
+		Value: gokeepasslib.V{Content: value, Protected: wrappers.NewBoolWrapper(true)},
+	}
 }
