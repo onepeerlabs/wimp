@@ -88,13 +88,13 @@ func completer(in prompt.Document) []prompt.Suggest {
 
 var suggestions = []prompt.Suggest{
 	{Text: "help", Description: "help"},
-	{Text: "init", Description: "generate and store mnemonic"},
 	{Text: "exit", Description: "stop wimp and close cli"},
+	{Text: "init", Description: "generate and store mnemonic"},
 	{Text: "generate", Description: "generate and store password"},
+	{Text: "new", Description: "store password"},
 	{Text: "get", Description: "get password"},
-	{Text: "store", Description: "store password"},
-	{Text: "export", Description: "export current wimp repository"},
-	{Text: "import", Description: "import a previously backed up wimp repository"},
+	{Text: "export", Description: "export to kdbx"},
+	{Text: "import", Description: "import a kdbx"},
 }
 
 var tagSuggestions = []prompt.Suggest{}
