@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/tyler-smith/go-bip39"
 )
@@ -48,6 +49,24 @@ func (a *Account) CreateMnemonic(passPhrase string) (string, string, error) {
 
 func (a *Account) LoadMnemonic(mnemonic string) {
 	a.encryptedMnemonic = mnemonic
+}
+
+func (a *Account) VerifyMasterPassword(password string) bool {
+	mnemonic, err := a.decryptMnemonic(password)
+	if err != nil {
+		return false
+	}
+	if mnemonic == "" {
+		return false
+	}
+	words := strings.Split(mnemonic, " ")
+	if len(words) != 12 {
+		return false
+	}
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return false
+	}
+	return true
 }
 
 func (a *Account) decryptMnemonic(password string) (string, error) {

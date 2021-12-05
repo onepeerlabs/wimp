@@ -17,6 +17,7 @@ import (
 	"github.com/onepeerlabs/wimp/pkg/manager"
 	generator "github.com/sethvargo/go-password/password"
 	"github.com/tobischo/gokeepasslib/v3"
+	"golang.design/x/clipboard"
 )
 
 const (
@@ -167,6 +168,12 @@ func executor(in string) {
 			Mask:  '*',
 		}
 		masterPassword, _ := passPrompt.Run()
+
+		if !acc.VerifyMasterPassword(masterPassword) {
+			fmt.Println("Wrong master password")
+			return
+		}
+
 		// check if mnemonic already exists
 		r, _, err := node.Get(comm.Context, tag)
 		if err != nil {
@@ -194,23 +201,23 @@ func executor(in string) {
 		fmt.Printf("Username : %s\n", m.Username)
 		fmt.Printf("Description : %s\n", m.Description)
 		fmt.Println("=============== Details ==========================")
-		fmt.Println("Press enter to hide the password")
-		passwordPrompt := promptui.Prompt{
-			Label: password,
-			Templates: &promptui.PromptTemplates{
-				Prompt:          "{{ . | bold }}",
-				Confirm:         "{{ . | bold }}",
-				Valid:           "{{ . | bold }}",
-				Invalid:         "{{ . | bold }}",
-				Success:         "{{ . | bold }}",
-				ValidationError: "{{ . | bold }}",
-				FuncMap:         nil,
-			},
-			HideEntered: true,
-		}
-		_, _ = passwordPrompt.Run()
+		fmt.Println("Password has been copied to clipboard")
+		//passwordPrompt := promptui.Prompt{
+		//	Label: password,
+		//	Templates: &promptui.PromptTemplates{
+		//		Prompt:          "{{ . | bold }}",
+		//		Confirm:         "{{ . | bold }}",
+		//		Valid:           "{{ . | bold }}",
+		//		Invalid:         "{{ . | bold }}",
+		//		Success:         "{{ . | bold }}",
+		//		ValidationError: "{{ . | bold }}",
+		//		FuncMap:         nil,
+		//	},
+		//	HideEntered: true,
+		//}
+		//_, _ = passwordPrompt.Run()
 
-		// TODO: copy to clipboard
+		clipboard.Write(clipboard.FmtText, []byte(password))
 	case "init":
 		// check if mnemonic already exists
 		_, _, err := node.Get(comm.Context, mnemonicTag)
@@ -227,7 +234,12 @@ func executor(in string) {
 			Mask:  '*',
 		}
 		password, _ := passPrompt.Run()
-
+		
+		if !acc.VerifyMasterPassword(password) {
+			fmt.Println("wrong master password")
+			return
+		}
+		
 		// Generate Mnemonic
 		mnemonic, encryptedMessage, err := acc.CreateMnemonic(password)
 		if err != nil {
@@ -368,9 +380,16 @@ func executor(in string) {
 			// encrypt and save
 			fmt.Println("saving")
 			encryptionPasswordPrompt := promptui.Prompt{
-				Label: "Please enter master password ",
+				Label: "Master Password ",
+				Mask:  '*',
 			}
+			
 			masterPassword, _ := encryptionPasswordPrompt.Run()
+			if !acc.VerifyMasterPassword(masterPassword) {
+				fmt.Println("wrong master password")
+				return
+			}
+			
 			encryptedPassword, err := acc.EncryptContent(masterPassword, password)
 			if err != nil {
 				log.Debug("password encryption failed", err.Error())
@@ -476,9 +495,16 @@ func executor(in string) {
 			// encrypt and save
 			fmt.Println("saving")
 			encryptionPasswordPrompt := promptui.Prompt{
-				Label: "Please enter master password ",
+				Label: "Master Password ",
+				Mask:  '*',
 			}
 			masterPassword, _ := encryptionPasswordPrompt.Run()
+
+			if !acc.VerifyMasterPassword(masterPassword) {
+				fmt.Println("wrong master password")
+				return
+			}
+			
 			encryptedPassword, err := acc.EncryptContent(masterPassword, password)
 			if err != nil {
 				log.Debug("password encryption failed", err.Error())
@@ -533,6 +559,7 @@ func executor(in string) {
 	case "import":
 		if len(blocks) < 2 {
 			fmt.Println("kdbx path not specified")
+			return
 		}
 		kdbx := blocks[1]
 		// check file stat
@@ -571,10 +598,16 @@ func executor(in string) {
 			return
 		}
 		encryptionPasswordPrompt := promptui.Prompt{
-			Label: "Please enter master password ",
+			Label: "Master Password ",
+			Mask:  '*',
 		}
 		masterPassword, _ := encryptionPasswordPrompt.Run()
-
+		
+		if !acc.VerifyMasterPassword(masterPassword) {
+			fmt.Println("wrong master password")
+			return
+		}
+		
 		for _, v := range db.Content.Root.Groups[0].Entries {
 			domain := v.GetContent("URL")
 			username := v.GetContent("UserName")
@@ -585,7 +618,6 @@ func executor(in string) {
 				Description: desc,
 			}
 			fmt.Printf("saving %s for %s on %s", v.GetTitle(), username, domain)
-			fmt.Println(username, v.GetPassword())
 			encryptedPassword, err := acc.EncryptContent(masterPassword, v.GetPassword())
 			if err != nil {
 				log.Debug("password encryption failed", err.Error())

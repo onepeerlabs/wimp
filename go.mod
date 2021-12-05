@@ -11,6 +11,10 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/tobischo/gokeepasslib/v3 v3.2.4
 	github.com/tyler-smith/go-bip39 v1.1.0
+	golang.design/x/clipboard v0.5.3
+)
+
+require (
 	github.com/Stebalien/go-bitfield v0.0.1 // indirect
 	github.com/aead/argon2 v0.0.0-20180111183520-a87724528b07 // indirect
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
@@ -163,6 +167,9 @@ require (
 	go.uber.org/zap v1.19.0 // indirect
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e // indirect
+	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6 // indirect
+	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d // indirect
+	golang.org/x/mobile v0.0.0-20210716004757-34ab1303b554 // indirect
 	golang.org/x/net v0.0.0-20211013171255-e13a2654a71e // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211013075003-97ac67df715c // indirect
